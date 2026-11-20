@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Fast Notepad</title>
+  <style>
+    :root {
+      --primary: #d32f2f;
+      --primary-dark: #b71c1c;
+      --bg: #f5f5f5;
+      --surface: #ffffff;
+      --text: #212121;
+      --text-sec: #757575;
+      --border: #e0e0e0;
+      --editor-bg: #ffffff;
+      --editor-text: #212121;
+      --font-size: 16px;
+    }
+    body.theme-dark {
+      --primary: #263238;
+      --primary-dark: #102027;
+      --bg: #121212;
+      --surface: #1e1e1e;
+      --text: #eceff1;
+      --text-sec: #90a4ae;
+      --border: #333333;
+    }
+    body.theme-blue {
+      --primary: #1976d2;
+      --primary-dark: #0d47a1;
+    }
+    body.editor-dark {
+      --editor-bg: #181818;
+      --editor-text: #e0e0e0;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+    .appbar {
+      background: var(--primary); color: #fff; height: 56px; display: flex; align-items: center;
+      padding: 0 12px; gap: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); z-index: 10;
+    }
+    .appbar-title { flex: 1; font-size: 19px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .icon-btn {
+      background: transparent; border: none; color: #fff; width: 40px; height: 40px;
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-size: 20px; cursor: pointer;
+    }
+    .icon-btn:active { background: rgba(255,255,255,0.2); }
+    .search-bar {
+      display: none; background: var(--primary-dark); padding: 8px 12px; gap: 8px; align-items: center;
+    }
+    .search-bar.active { display: flex; }
+    .search-bar input {
+      flex: 1; padding: 8px 12px; border-radius: 6px; border: none; font-size: 15px; outline: none;
+    }
+    .content { flex: 1; overflow-y: auto; padding: 10px; }
+    .note-card {
+      background: var(--surface); border-radius: 8px; padding: 14px; margin-bottom: 10px;
+      border: 1px solid var(--border); box-shadow: 0 1px 2px rgba(0,0,0,0.06); cursor: pointer;
+    }
+    .note-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .note-title { font-weight: 600; font-size: 16px; color: var(--text); }
+    .note-badge { font-size: 11px; padding: 2px 6px; border-radius: 4px; background: rgba(211,47,47,0.12); color: #d32f2f; }
+    .note-preview { font-size: 14px; color: var(--text-sec); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .note-meta { font-size: 11px; color: var(--text-sec); margin-top: 8px; display: flex; justify-content: space-between; }
+    mark { background: #fff176; color: #000; padding: 0 2px; border-radius: 2px; }
+    .fab {
+      position: fixed; right: 20px; bottom: 20px; width: 56px; height: 56px; border-radius: 50%;
+      background: var(--primary); color: #fff; border: none; font-size: 28px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3); cursor: pointer; display: flex; align-items: center; justify-content: center;
+    }
+    /* Drawer */
+    .drawer-backdrop {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 50;
+    }
+    .drawer-backdrop.open { display: block; }
+    .drawer {
+      position: fixed; top: 0; bottom: 0; left: -280px; width: 270px; background: var(--surface);
+      z-index: 60; transition: left 0.25s ease; display: flex; flex-direction: column;
+    }
+    .drawer.open { left: 0; }
+    .drawer-header { background: var(--primary); color: #fff; padding: 24px 16px; font-size: 20px; font-weight: bold; }
+    .drawer-item {
+      padding: 14px 16px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border);
+      cursor: pointer; color: var(--text); font-size: 15px;
+    }
+    .drawer-item.active { background: rgba(211,47,47,0.1); font-weight: 600; color: var(--primary); }
+    /* Editor View */
+    .view { display: none; flex-direction: column; height: 100%; }
+    .view.active { display: flex; }
+    .editor-title-input {
+      width: 100%; padding: 12px 14px; font-size: 18px; font-weight: 600; border: none;
+      border-bottom: 1px solid var(--border); background: var(--editor-bg); color: var(--editor-text); outline: none;
+    }
+    .editor-textarea {
+      flex: 1; width: 100%; padding: 14px; border: none; resize: none; outline: none;
+      background: var(--editor-bg); color: var(--editor-text); font-size: var(--font-size); line-height: 1.5;
+    }
+    .modal-backdrop {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 80;
+      align-items: center; justify-content: center; padding: 16px;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      background: var(--surface); color: var(--text); border-radius: 10px; width: 100%; max-width: 400px;
+      padding: 18px; box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    }
+    .modal h3 { margin-bottom: 12px; font-size: 18px; }
+    .btn {
+      padding: 10px 14px; border-radius: 6px; border: none; background: var(--primary); color: #fff;
+      font-size: 14px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 8px;
+    }
+    .btn-sec { background: #607d8b; }
+    .btn-danger { background: #c62828; }
+    select, input[type="text"], input[type="password"] {
+      width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border);
+      background: var(--bg); color: var(--text); margin-top: 6px; font-size: 15px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- MAIN LIST VIEW -->
+  <div id="listView" class="view active">
+    <div class="appbar">
+      <button class="icon-btn" onclick="toggleDrawer(true)">☰</button>
+      <div class="appbar-title" id="currentFolderTitle">Моите бележки</div>
+      <button class="icon-btn" onclick="toggleSearch()">🔍</button>
+      <button class="icon-btn" onclick="cycleSort()" title="Сортиране">⇅</button>
+    </div>
+    <div class="search-bar" id="searchBar">
+      <input type="text" id="searchInput" placeholder="Търсене на дума в заглавия и текст..." oninput="renderNotes()" />
+      <button class="icon-btn" onclick="clearSearch()">✕</button>
+    </div>
+    <div class="content" id="notesContainer"></div>
+    <button class="fab" onclick="createNewNote()">+</button>
+  </div>
+
+  <!-- EDITOR VIEW -->
+  <div id="editorView" class="view">
+    <div class="appbar">
+      <button class="icon-btn" onclick="closeEditor()">←</button>
+      <div class="appbar-title">Редактор</div>
+      <button class="icon-btn" onclick="startVoiceInput()" title="Гласово въвеждане">🎤</button>
+      <button class="icon-btn" onclick="toggleNoteEncrypt()" id="btnEncrypt" title="Криптиране">🔒</button>
+      <button class="icon-btn" onclick="openExportModal()" title="Експорт / Word">📤</button>
+      <button class="icon-btn" onclick="deleteCurrentNote()" title="Изтрий">🗑️</button>
+    </div>
+    <input type="text" id="noteTitle" class="editor-title-input" placeholder="Заглавие на бележката..." spellcheck="true" lang="bg" oninput="autoSaveNote()" />
+    <textarea id="noteBody" class="editor-textarea" placeholder="Напишете бележката си тук..." spellcheck="true" lang="bg" oninput="autoSaveNote()"></textarea>
+  </div>
+
+  <!-- DRAWER -->
+  <div class="drawer-backdrop" id="drawerBackdrop" onclick="toggleDrawer(false)"></div>
+  <div class="drawer" id="drawer">
+    <div class="drawer-header">Fast Notepad</div>
+    <div style="flex:1; overflow-y:auto;">
+      <div class="drawer-item" onclick="selectFolder('Моите бележки')">📁 Моите бележки</div>
+      <div id="customFoldersList"></div>
+      <div class="drawer-item" onclick="createFolderPrompt()">➕ Нова папка</div>
+      <div class="drawer-item" onclick="selectFolder('Кошче')">🗑️ Кошче</div>
+      <div class="drawer-item" onclick="openSyncModal()">🔄 Папка / Word / Файлове</div>
+      <div class="drawer-item" onclick="openSettingsModal()">⚙️ Настройки и Теми</div>
+    </div>
+  </div>
+
+  <!-- SYNC & WORD MODAL -->
+  <div class="modal-backdrop" id="syncModal" onclick="if(event.target===this) closeModal('syncModal')">
+    <div class="modal">
+      <h3>Синхронизация с Windows / Word</h3>
+      <p style="font-size:13px; color:var(--text-sec); margin-bottom:10px;">
+        Свържете реална папка на телефона или импортирайте/експортирайте файлове (.txt, .doc, .docx) за редакция в Word.
+      </p>
+      <button class="btn" onclick="connectNativeFolder()">📂 Свържи реална папка (Android SAF)</button>
+      <button class="btn btn-sec" onclick="syncAllWithFolder()">🔄 Синхронизирай с папката сега</button>
+      <hr style="margin:12px 0; border-color:var(--border);">
+      <label style="font-size:13px; font-weight:600;">Качи файлове от телефон / Windows:</label>
+      <input type="file" id="fileImportInput" multiple accept=".txt,.doc,.docx,.md" onchange="handleFileImport(event)" style="margin-top:6px;" />
+      <button class="btn btn-sec" onclick="exportAllAsTxt()">💾 Експортирай всички (.txt)</button>
+      <button class="btn btn-danger" onclick="closeModal('syncModal')">Затвори</button>
+    </div>
+  </div>
+
+  <!-- EXPORT SINGLE NOTE MODAL -->
+  <div class="modal-backdrop" id="exportModal" onclick="if(event.target===this) closeModal('exportModal')">
+    <div class="modal">
+      <h3>Експорт / Отваряне в Word</h3>
+      <button class="btn" onclick="exportCurrentNote('txt')">📄 Запази / Сподели като .TXT (UTF-8)</button>
+      <button class="btn btn-sec" onclick="exportCurrentNote('doc')">📘 Запази / Сподели за Word (.DOC)</button>
+      <button class="btn btn-danger" onclick="closeModal('exportModal')">Отказ</button>
+    </div>
+  </div>
+
+  <!-- SETTINGS MODAL -->
+  <div class="modal-backdrop" id="settingsModal" onclick="if(event.target===this) closeModal('settingsModal')">
+    <div class="modal">
+      <h3>Настройки</h3>
+      <label style="font-size:13px;">Глобална тема:</label>
+      <select id="globalThemeSelect" onchange="applySettings()">
+        <option value="red">Червена (Класическа)</option>
+        <option value="dark">Тъмна</option>
+        <option value="blue">Синя</option>
+      </select>
+      <label style="font-size:13px; display:block; margin-top:10px;">Тема на редактора:</label>
+      <select id="editorThemeSelect" onchange="applySettings()">
+        <option value="light">Бял лист</option>
+        <option value="dark">Черен лист</option>
+      </select>
+      <label style="font-size:13px; display:block; margin-top:10px;">Размер на шрифта:</label>
+      <select id="fontSizeSelect" onchange="applySettings()">
+        <option value="14px">Малък</option>
+        <option value="16px" selected>Среден</option>
+        <option value="20px">Голям</option>
+        <option value="24px">Много голям</option>
+      </select>
+      <button class="btn" onclick="closeModal('settingsModal')">Готово</button>
+    </div>
+  </div>
+
+  <script>
+    let notes = JSON.parse(localStorage.getItem('fn_notes') || '[]');
+    let folders = JSON.parse(localStorage.getItem('fn_folders') || '[]');
+    let currentFolder = 'Моите бележки';
+    let currentNoteId = null;
+    let sortBy = 'date'; // 'date' or 'title'
+
+    if (notes.length === 0) {
+      notes.push({
+        id: Date.now().toString(),
+        title: 'Добре дошли в Fast Notepad',
+        content: 'Можете да пишете бележки, да търсите думи, да диктувате с глас и да експортирате файлове за Word на Windows.',
+        folder: 'Моите бележки',
+        encrypted: false,
+        trashed: false,
+        updatedAt: Date.now()
+      });
+      saveData();
+    }
+
+    function saveData() {
+      localStorage.setItem('fn_notes', JSON.stringify(notes));
+      localStorage.setItem('fn_folders', JSON.stringify(folders));
+    }
+
+    function toggleDrawer(open) {
+      document.getElementById('drawer').classList.toggle('open', open);
+      document.getElementById('drawerBackdrop').classList.toggle('open', open);
+      if (open) renderFolders();
+    }
+
+    function renderFolders() {
+      const container = document.getElementById('customFoldersList');
+      container.innerHTML = folders.map(f =>
+        `<div class="drawer-item" onclick="selectFolder('${f.replace(/'/g, "\'")}')">📁 ${f}</div>`
+      ).join('');
+    }
+
+    function selectFolder(folder) {
+      currentFolder = folder;
+      document.getElementById('currentFolderTitle').textContent = folder;
+      toggleDrawer(false);
+      renderNotes();
+    }
+
+    function createFolderPrompt() {
+      const name = prompt('Име на новата папка:');
+      if (name && name.trim() && !folders.includes(name.trim())) {
+        folders.push(name.trim());
+        saveData();
+        renderFolders();
+      }
+    }
+
+    function toggleSearch() {
+      const bar = document.getElementById('searchBar');
+      bar.classList.toggle('active');
+      if (bar.classList.contains('active')) {
+        document.getElementById('searchInput').focus();
+      } else {
+        clearSearch();
+      }
+    }
+
+    function clearSearch() {
+      document.getElementById('searchInput').value = '';
+      renderNotes();
+    }
+
+    function cycleSort() {
+      sortBy = sortBy === 'date' ? 'title' : 'date';
+      alert(sortBy === 'date' ? 'Сортиране по дата' : 'Сортиране по заглавие');
+      renderNotes();
+    }
+
+    function highlightText(text, query) {
+      if (!query) return escapeHtml(text);
+      const safe = escapeHtml(text);
+      const re = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\]/g, '\$&')})`, 'gi');
+      return safe.replace(re, '<mark>$1</mark>');
+    }
+
+    function escapeHtml(str) {
+      return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    function renderNotes() {
+      const query = document.getElementById('searchInput').value.trim();
+      let filtered = notes.filter(n => {
+        if (currentFolder === 'Кошче') return n.trashed;
+        if (n.trashed) return false;
+        if (query) return true; // Search across all folders when searching
+        return n.folder === currentFolder;
+      });
+
+      if (query) {
+        const q = query.toLowerCase();
+        filtered = filtered.filter(n =>
+          (n.title && n.title.toLowerCase().includes(q)) ||
+          (!n.encrypted && n.content && n.content.toLowerCase().includes(q))
+        );
+      }
+
+      filtered.sort((a, b) => sortBy === 'date' ? b.updatedAt - a.updatedAt : (a.title || '').localeCompare(b.title || ''));
+
+      const container = document.getElementById('notesContainer');
+      if (filtered.length === 0) {
+        container.innerHTML = '<div style="text-align:center; color:var(--text-sec); margin-top:40px;">Няма намерени бележки</div>';
+        return;
+      }
+
+      container.innerHTML = filtered.map(n => {
+        const dateStr = new Date(n.updatedAt).toLocaleString('bg-BG', { dateStyle: 'short', timeStyle: 'short' });
+        const preview = n.encrypted ? '🔒 Криптирана бележка' : highlightText(n.content || '', query);
+        const title = highlightText(n.title || 'Без заглавие', query);
+        return `
+          <div class="note-card" onclick="openNote('${n.id}')">
+            <div class="note-header">
+              <div class="note-title">${title}</div>
+              ${n.encrypted ? '<span class="note-badge">Криптирана</span>' : ''}
+            </div>
+            <div class="note-preview">${preview}</div>
+            <div class="note-meta">
+              <span>${n.folder}</span>
+              <span>${dateStr}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function createNewNote() {
+      const id = Date.now().toString();
+      const folder = currentFolder === 'Кошче' ? 'Моите бележки' : currentFolder;
+      notes.unshift({
+        id, title: '', content: '', folder, encrypted: false, trashed: false, updatedAt: Date.now()
+      });
+      saveData();
+      openNote(id);
+    }
+
+    function openNote(id) {
+      const note = notes.find(n => n.id === id);
+      if (!note) return;
+      if (note.encrypted) {
+        const pwd = prompt('Въведете парола за отключване:');
+        if (pwd !== note.password) {
+          alert('Грешна парола!');
+          return;
+        }
+      }
+      currentNoteId = id;
+      document.getElementById('noteTitle').value = note.title;
+      document.getElementById('noteBody').value = note.content;
+      document.getElementById('btnEncrypt').textContent = note.encrypted ? '🔓' : '🔒';
+      document.getElementById('listView').classList.remove('active');
+      document.getElementById('editorView').classList.add('active');
+    }
+
+    function autoSaveNote() {
+      const note = notes.find(n => n.id === currentNoteId);
+      if (!note) return;
+      note.title = document.getElementById('noteTitle').value;
+      note.content = document.getElementById('noteBody').value;
+      note.updatedAt = Date.now();
+      saveData();
+      if (window.AndroidBridge && !note.encrypted) {
+        window.AndroidBridge.syncNoteToFolder(note.folder, note.title || 'note_' + note.id, note.content);
+      }
+    }
+
+    function closeEditor() {
+      autoSaveNote();
+      currentNoteId = null;
+      document.getElementById('editorView').classList.remove('active');
+      document.getElementById('listView').classList.add('active');
+      renderNotes();
+    }
+
+    function toggleNoteEncrypt() {
+      const note = notes.find(n => n.id === currentNoteId);
+      if (!note) return;
+      if (note.encrypted) {
+        note.encrypted = false;
+        note.password = '';
+        alert('Криптирането е премахнато.');
+      } else {
+        const pwd = prompt('Задайте парола за тази бележка:');
+        if (pwd) {
+          note.encrypted = true;
+          note.password = pwd;
+          alert('Бележката е криптирана.');
+        }
+      }
+      document.getElementById('btnEncrypt').textContent = note.encrypted ? '🔓' : '🔒';
+      saveData();
+    }
+
+    function deleteCurrentNote() {
+      const note = notes.find(n => n.id === currentNoteId);
+      if (!note) return;
+      if (note.trashed) {
+        if (confirm('Да се изтрие ли окончателно?')) {
+          notes = notes.filter(n => n.id !== currentNoteId);
+        }
+      } else {
+        note.trashed = true;
+      }
+      saveData();
+      closeEditor();
+    }
+
+    function startVoiceInput() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        alert('Гласовото разпознаване не се поддържа на това устройство.');
+        return;
+      }
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'bg-BG';
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        const body = document.getElementById('noteBody');
+        body.value += (body.value ? ' ' : '') + transcript;
+        autoSaveNote();
+      };
+      recognition.start();
+    }
+
+    function openExportModal() { document.getElementById('exportModal').classList.add('open'); }
+    function openSyncModal() { toggleDrawer(false); document.getElementById('syncModal').classList.add('open'); }
+    function openSettingsModal() { toggleDrawer(false); document.getElementById('settingsModal').classList.add('open'); }
+    function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+    function exportCurrentNote(ext) {
+      const note = notes.find(n => n.id === currentNoteId);
+      if (!note) return;
+      const title = (note.title || 'belezka').trim();
+      let content = note.content || '';
+      let mime = 'text/plain;charset=utf-8';
+      if (ext === 'doc') {
+        content = `<html><head><meta charset="utf-8"></head><body><h2>${escapeHtml(title)}</h2><p>${escapeHtml(content).replace(/
+/g, '<br>')}</p></body></html>`;
+        mime = 'application/msword';
+      }
+      if (window.AndroidBridge) {
+        window.AndroidBridge.saveTextFile(`${title}.${ext}`, content, mime);
+      } else {
+        const blob = new Blob([content], { type: mime });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `${title}.${ext}`;
+        a.click();
+      }
+      closeModal('exportModal');
+    }
+
+    function exportAllAsTxt() {
+      const activeNotes = notes.filter(n => !n.trashed && !n.encrypted);
+      const combined = activeNotes.map(n => `=== ${n.title || 'Без заглавие'} [${n.folder}] ===
+${n.content}
+`).join('
+---
+
+');
+      if (window.AndroidBridge) {
+        window.AndroidBridge.saveTextFile('FastNotepad_Backup.txt', combined, 'text/plain');
+      } else {
+        const blob = new Blob([combined], { type: 'text/plain;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'FastNotepad_Backup.txt';
+        a.click();
+      }
+    }
+
+    async function handleFileImport(event) {
+      const files = event.target.files;
+      if (!files || !files.length) return;
+      let count = 0;
+      for (const file of files) {
+        const rawText = await file.text();
+        let cleanText = rawText;
+        if (file.name.endsWith('.doc') || file.name.endsWith('.docx')) {
+          const doc = new DOMParser().parseFromString(rawText, 'text/html');
+          cleanText = doc.body.innerText || rawText.replace(/<[^>]+>/g, ' ');
+        }
+        const title = file.name.replace(/\.(txt|doc|docx|md)$/i, '');
+        const existing = notes.find(n => n.title === title && !n.trashed);
+        if (existing) {
+          existing.content = cleanText.trim();
+          existing.updatedAt = Date.now();
+        } else {
+          notes.unshift({
+            id: (Date.now() + count).toString(),
+            title, content: cleanText.trim(), folder: 'Моите бележки',
+            encrypted: false, trashed: false, updatedAt: Date.now()
+          });
+        }
+        count++;
+      }
+      saveData();
+      renderNotes();
+      alert(`Импортирани/обновени са ${count} бележки.`);
+      closeModal('syncModal');
+    }
+
+    function connectNativeFolder() {
+      if (window.AndroidBridge) {
+        window.AndroidBridge.pickSyncFolder();
+      } else {
+        alert('Тази функция работи в инсталираното Android APK приложение.');
+      }
+    }
+
+    window.onNativeFolderConnected = function() {
+      syncAllWithFolder();
+    };
+
+    function syncAllWithFolder() {
+      if (!window.AndroidBridge) return;
+      const jsonStr = window.AndroidBridge.readNotesFromFolder();
+      try {
+        const externalNotes = JSON.parse(jsonStr);
+        externalNotes.forEach(ext => {
+          const existing = notes.find(n => n.title === ext.title && !n.trashed);
+          if (existing) {
+            if (ext.updatedAt > existing.updatedAt) {
+              existing.content = ext.content;
+              existing.updatedAt = ext.updatedAt;
+            }
+          } else {
+            notes.unshift({
+              id: Date.now().toString() + Math.random(),
+              title: ext.title,
+              content: ext.content,
+              folder: ext.folder || 'Моите бележки',
+              encrypted: false, trashed: false,
+              updatedAt: ext.updatedAt || Date.now()
+            });
+          }
+        });
+        notes.filter(n => !n.trashed && !n.encrypted).forEach(n => {
+          window.AndroidBridge.syncNoteToFolder(n.folder, n.title || 'note_' + n.id, n.content);
+        });
+        saveData();
+        renderNotes();
+        alert('Синхронизацията с папката завърши!');
+      } catch (e) {
+        alert('Грешка при четене на папката.');
+      }
+    }
+
+    function applySettings() {
+      const gTheme = document.getElementById('globalThemeSelect').value;
+      const eTheme = document.getElementById('editorThemeSelect').value;
+      const fSize = document.getElementById('fontSizeSelect').value;
+      document.body.className = '';
+      if (gTheme === 'dark') document.body.classList.add('theme-dark');
+      if (gTheme === 'blue') document.body.classList.add('theme-blue');
+      if (eTheme === 'dark') document.body.classList.add('editor-dark');
+      document.documentElement.style.setProperty('--font-size', fSize);
+    }
+
+    window.handleAndroidBack = function() {
+      if (document.getElementById('editorView').classList.contains('active')) {
+        closeEditor();
+        return true;
+      }
+      return false;
+    };
+
+    renderNotes();
+  </script>
+</body>
+</html>
