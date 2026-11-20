@@ -128,6 +128,10 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
+    private fun sanitizeFileName(name: String): String {
+        return name.replace(Regex("[\\\\/:*?\"<>|]"), "_")
+    }
+
     private fun shareOrSaveFile(file: File, mimeType: String) {
         val uri = FileProvider.getUriForFile(this, "${packageName}.fileprovider", file)
         val intent = Intent(Intent.ACTION_SEND).apply {
@@ -148,7 +152,7 @@ class MainActivity : AppCompatActivity() {
         fun saveTextFile(fileName: String, content: String, mimeType: String) {
             runOnUiThread {
                 try {
-                    val safeName = fileName.replace(Regex("[\\/:*?"<>|]"), "_")
+                    val safeName = sanitizeFileName(fileName)
                     val outFile = File(cacheDir, safeName)
                     outFile.writeText(content, Charsets.UTF_8)
                     shareOrSaveFile(outFile, mimeType)
@@ -174,7 +178,7 @@ class MainActivity : AppCompatActivity() {
                     rootDoc.findFile(folderName) ?: rootDoc.createDirectory(folderName) ?: rootDoc
                 } else rootDoc
 
-                val safeFile = fileName.replace(Regex("[\\/:*?"<>|]"), "_") + ".txt"
+                val safeFile = sanitizeFileName(fileName) + ".txt"
                 val existing = targetDir.findFile(safeFile)
                 val docFile = existing ?: targetDir.createFile("text/plain", safeFile) ?: return false
                 contentResolver.openOutputStream(docFile.uri, "wt")?.use { out ->
@@ -211,5 +215,7 @@ class MainActivity : AppCompatActivity() {
             } catch (_: Exception) {}
             return arr.toString()
         }
+    }
+}
     }
 }
