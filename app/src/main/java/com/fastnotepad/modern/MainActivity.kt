@@ -98,6 +98,19 @@ class MainActivity : AppCompatActivity() {
             override fun onPermissionRequest(request: PermissionRequest?) {
                 request?.grant(request.resources)
             }
+
+            override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                if (consoleMessage?.messageLevel() == ConsoleMessage.MessageLevel.ERROR) {
+                    runOnUiThread {
+                        Toast.makeText(
+                            this@MainActivity,
+                            "JS грешка (ред ${consoleMessage.lineNumber()}): ${consoleMessage.message()}",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                }
+                return super.onConsoleMessage(consoleMessage)
+            }
         }
 
         webView.setDownloadListener { url, _, contentDisposition, mimeType, _ ->
